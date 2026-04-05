@@ -1,20 +1,18 @@
+import asyncio
 from fastapi import APIRouter, HTTPException, UploadFile, File
 from app.core.detector import detect
+from app.core.validate import validate_image
 
 router = APIRouter(prefix="/api/v1/cv", tags=["emotion"])
-ALLOWED = {"jpg", "jpeg", "png", "bmp", "webp"}
-
-
-def _validate(filename: str):
-    ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
-    if ext not in ALLOWED:
-        raise HTTPException(status_code=400, detail=f"Unsupported format: .{ext}")
 
 
 @router.post("/emotion")
 async def emotion(file: UploadFile = File(...)):
-    _validate(file.filename)
     content = await file.read()
     if not content:
         raise HTTPException(status_code=400, detail="Empty file")
-    return detect(content)
+    validate_image(file, content)
+    try:
+        return await asyncio.get_running_loop().run_in_executor(None, detect, content)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Emotion detection error: {e}")
